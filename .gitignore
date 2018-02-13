@@ -3,3 +3,6 @@ env/
 
 # Vim swap files
 *.sw[op]
+
+# Python files
+*.pyc

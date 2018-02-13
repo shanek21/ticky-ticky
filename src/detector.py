@@ -22,7 +22,6 @@ class Detector(object):
         # Create windows
         cv.namedWindow('bgr_window') # window for unprocessed image
         cv.namedWindow('mask_window') # window for binary image
-        cv.namedWindow('sliders_window') # window for parameter sliders
 
         # Initialize CV images
         self.bgr_img = None # the latest image from the camera
@@ -31,22 +30,26 @@ class Detector(object):
         self.blurred_mask_img = None
 
         # HSV filter sliders
-        self.hsv_lb = np.array([0, 155, 120]) # hsv lower bound
-        self.hsv_ub = np.array([21, 249, 220]) # hsv upper bound
-        cv.createTrackbar('H lb', 'sliders_window', self.hsv_lb[0], 255, self.set_h_lb)
-        cv.createTrackbar('H ub', 'sliders_window', self.hsv_ub[0], 255, self.set_h_ub)
-        cv.createTrackbar('S lb', 'sliders_window', self.hsv_lb[1], 255, self.set_s_lb)
-        cv.createTrackbar('S ub', 'sliders_window', self.hsv_ub[1], 255, self.set_s_ub)
-        cv.createTrackbar('V lb', 'sliders_window', self.hsv_lb[2], 255, self.set_v_lb)
-        cv.createTrackbar('V ub', 'sliders_window', self.hsv_ub[2], 255, self.set_v_ub)
+        hsv_parameters = np.loadtxt('hsv_parameters.txt', dtype=np.int_)
+        self.hsv_lb = hsv_parameters[0]
+        self.hsv_ub = hsv_parameters[1]
+        print self.hsv_lb
+        print self.hsv_ub
+        cv.createTrackbar('H lb', 'mask_window', self.hsv_lb[0], 255, self.set_h_lb)
+        cv.createTrackbar('H ub', 'mask_window', self.hsv_ub[0], 255, self.set_h_ub)
+        cv.createTrackbar('S lb', 'mask_window', self.hsv_lb[1], 255, self.set_s_lb)
+        cv.createTrackbar('S ub', 'mask_window', self.hsv_ub[1], 255, self.set_s_ub)
+        cv.createTrackbar('V lb', 'mask_window', self.hsv_lb[2], 255, self.set_v_lb)
+        cv.createTrackbar('V ub', 'mask_window', self.hsv_ub[2], 255, self.set_v_ub)
 
         # Enable interactive plotting mode
         plt.ion()
 
         # Initialize plot variables
         self.start_time = time.time()
-        self.t = np.array([]) # time
-        self.y = np.array([]) # height
+        self.t = np.array([]) # time in seconds
+        self.x = np.array([]) # x position in pixels
+        self.y = np.array([]) # y position in pixels
 
 
     def set_h_lb(self, val):
@@ -91,7 +94,7 @@ class Detector(object):
         while 1:
             # Setup cv windows
             cv.namedWindow('bgr_window') # window for bgr video stream
-            cv.namedWindow('sliders_window') # window for parameter sliders
+            # cv.namedWindow('sliders_window') # window for parameter sliders
             cv.namedWindow('mask_window') # window for binary mask image
 
             # Read in a single image from the video stream
@@ -104,7 +107,7 @@ class Detector(object):
             self.mask_img = cv.inRange(self.hsv_img, self.hsv_lb, self.hsv_ub)
 
             # Erode away small particles in the mask image
-            self.mask_img = cv.erode(self.mask_img, None, iterations=3)
+            self.mask_img = cv.erode(self.mask_img, None, iterations=2)
 
             # Blur the masked image to improve contour detection
             self.blurred_mask_img = cv.GaussianBlur(self.mask_img, (11, 11), 0)
@@ -118,38 +121,39 @@ class Detector(object):
                 largest_contour = max(contours, key=cv.contourArea)
                 ((x, y), radius) = cv.minEnclosingCircle(largest_contour)
 
-                # Draw circles on image to represent the ball
-                if radius > 10:
-                    cv.circle(self.bgr_img, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-                    cv.circle(self.bgr_img, (int(x), int(y)), 5, (0, 0, 255), -1)
+                # Draw circle on image to show detected object
+                cv.circle(self.bgr_img, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+                if self.plot:
                     self.t = np.append(self.t, time.time() - self.start_time)
+                    self.x = np.append(self.x, x)
                     self.y = np.append(self.y, self.cap_height - y)
-                    if self.plot:
-                        plt.scatter(self.t[-1], self.y[-1])
-                        plt.pause(0.05)
-                else:
-                    print "Radius too small!"
+                    plt.scatter(self.t[-1], self.x[-1])
+                    plt.pause(0.005)
 
             # Show windows
             cv.imshow('bgr_window', self.bgr_img)
-            # cv.imshow('mask_window', self.mask_img)
+            cv.imshow('mask_window', self.mask_img)
 
             # Delay and look for user input to exit loop
             k = cv.waitKey(5) & 0xFF
-            if k == 27: # exit if user presses the Escape key
-                # Save data to text file
-                now = datetime.now()
-                timestamp = '{:04d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
-                np.savetxt('../data/' + timestamp + '.txt', np.array([self.t, self.y]))
+            if k == 27: # exit if user presses the 'Escape' key
+                if self.plot:
+                    # Save data to text file
+                    now = datetime.now()
+                    timestamp = '{:04d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
+                    np.savetxt('../data/' + timestamp + '.txt', np.array([self.t, self.x]))
 
-                # Plot data
-                plt.ioff() # turn off interactive plotting
-                plt.title('Height vs Time')
-                plt.xlabel('Time (s)')
-                plt.ylabel('Height (pixels)')
-                plt.plot(self.t, self.y)
-                plt.show()
+                    # Plot data
+                    plt.ioff() # turn off interactive plotting
+                    plt.title('Position vs Time')
+                    plt.xlabel('Time (s)')
+                    plt.ylabel('Position (pixels)')
+                    plt.plot(self.t, self.x)
+                    plt.show()
                 break
+            elif k == 115: # save hsv parameters if user presses 's' key
+                np.savetxt('hsv_parameters.txt', np.array([self.hsv_lb, self.hsv_ub]), fmt='%.d')
+                print 'Saved HSV parameters.'
 
         # Close opencv windows
         cv.destroyAllWindows()
