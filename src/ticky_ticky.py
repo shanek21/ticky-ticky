@@ -1,6 +1,7 @@
 """ Detect an object in the camera and plot its position """
 
 import time
+import math
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,24 +18,25 @@ class Detector(object):
 
         # Grab video capture
         self.cap = cv.VideoCapture(0)
-        self.cap_height = self.cap.get(4) # height of video stream in pixels
+        self.cap_width = self.cap.get(cv.CAP_PROP_FRAME_WIDTH) # width of video stream in pixels
+        self.cap_height = self.cap.get(cv.CAP_PROP_FRAME_HEIGHT) # height of video stream in pixels
 
         # Create windows
         cv.namedWindow('bgr_window') # window for unprocessed image
+        cv.moveWindow('bgr_window', 0, 0)
         cv.namedWindow('mask_window') # window for binary image
+        cv.moveWindow('mask_window', 700, 0)
 
         # Initialize CV images
         self.bgr_img = None # the latest image from the camera
         self.hsv_img = None
         self.mask_img = None
-        self.blurred_mask_img = None
+        self.mask_img = None
 
         # HSV filter sliders
         hsv_parameters = np.loadtxt('hsv_parameters.txt', dtype=np.int_)
         self.hsv_lb = hsv_parameters[0]
         self.hsv_ub = hsv_parameters[1]
-        print self.hsv_lb
-        print self.hsv_ub
         cv.createTrackbar('H lb', 'mask_window', self.hsv_lb[0], 255, self.set_h_lb)
         cv.createTrackbar('H ub', 'mask_window', self.hsv_ub[0], 255, self.set_h_ub)
         cv.createTrackbar('S lb', 'mask_window', self.hsv_lb[1], 255, self.set_s_lb)
@@ -100,6 +102,13 @@ class Detector(object):
             # Read in a single image from the video stream
             _, self.bgr_img = self.cap.read()
 
+            # Draw lines to visually split bgr_img in four equal quadrants
+            line_color = (255, 255, 0)
+            cv.line(self.bgr_img, (int(self.cap_width / 2), 0),
+                    (int(self.cap_width / 2), int(self.cap_height)), line_color)
+            cv.line(self.bgr_img, (0, int(self.cap_height / 2)),
+                    (int(self.cap_width), int(self.cap_height / 2)), line_color)
+
             # Convert bgr to hsv
             self.hsv_img = cv.cvtColor(self.bgr_img, cv.COLOR_BGR2HSV)
 
@@ -107,22 +116,54 @@ class Detector(object):
             self.mask_img = cv.inRange(self.hsv_img, self.hsv_lb, self.hsv_ub)
 
             # Erode away small particles in the mask image
-            self.mask_img = cv.erode(self.mask_img, None, iterations=2)
+            self.mask_img = cv.erode(self.mask_img, None, iterations=1)
 
             # Blur the masked image to improve contour detection
-            self.blurred_mask_img = cv.GaussianBlur(self.mask_img, (11, 11), 0)
+            self.mask_img = cv.GaussianBlur(self.mask_img, (11, 11), 0)
 
             # Detect contours
-            contours = cv.findContours(self.blurred_mask_img.copy(), cv.RETR_EXTERNAL,
+            contours = cv.findContours(self.mask_img.copy(), cv.RETR_EXTERNAL,
                     cv.CHAIN_APPROX_SIMPLE)[-2]
 
             # Draw bounding circle around largest contour
-            if len(contours) > 0:
-                largest_contour = max(contours, key=cv.contourArea)
-                ((x, y), radius) = cv.minEnclosingCircle(largest_contour)
+            tl = [] # largest contour in top-left quadrant
+            tla = 0 # area of largest contour in top-left quadrant
+            tr = [] # largest contour in top-right quadrant
+            tra = 0 # area of largest contour in top-right quadrant
+            bl = [] # largest contour in bottom-left quadrant
+            bla = 0 # area of largest contour in bottom-left quadrant
+            br = [] # largest contour in bottom-right quadrant
+            bra = 0 # area of largest contour in bottom-right quadrant
+            for c in contours:
+                p = c[0][0] # the first point in the contour
+                if p[0] < self.cap_width / 2: # left half of bgr_img
+                    if p[1] < self.cap_height / 2: # top-left quadrant of bgr_img
+                        if cv.contourArea(c) > tla:
+                            tl = c
+                            tla = cv.contourArea(c)
+                    else: # bottom-left quadrant of bgr_img
+                        if cv.contourArea(c) > bla:
+                            bl = c
+                            bla = cv.contourArea(c)
+                else: # right half of bgr_img
+                    if p[1] < self.cap_height / 2: # top-right quadrant of bgr_img
+                        if cv.contourArea(c) > tra:
+                            tr = c
+                            tra = cv.contourArea(c)
+                    else: # bottom-right quadrant of bgr_img
+                        if cv.contourArea(c) > bra:
+                            br = c
+                            bra = cv.contourArea(c)
+
+            largest_contours = [ [tl, 'Top Left'], [tr, 'Top Right'], [bl, 'Bottom Left'], [br, 'Bottom Right'] ]
+            for c in largest_contours:
+                if len(c[0]) == 0: # if c is actually a contour
+                    continue
 
                 # Draw circle on image to show detected object
+                ((x, y), radius) = cv.minEnclosingCircle(c[0])
                 cv.circle(self.bgr_img, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+                cv.putText(self.bgr_img, c[1], (int(x), int(y)), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
                 if self.plot:
                     self.t = np.append(self.t, time.time() - self.start_time)
                     self.x = np.append(self.x, x)
@@ -152,7 +193,7 @@ class Detector(object):
                     plt.show()
                 break
             elif k == 115: # save hsv parameters if user presses 's' key
-                np.savetxt('hsv_parameters.txt', np.array([self.hsv_lb, self.hsv_ub]), fmt='%.d')
+                np.savetxt('hsv_parameters.txt', np.array([self.hsv_lb, self.hsv_ub]), fmt='%03d')
                 print 'Saved HSV parameters.'
 
         # Close opencv windows
@@ -160,5 +201,12 @@ class Detector(object):
 
 
 if __name__ == '__main__':
-    detector = Detector(plot=True)
+    import sys
+
+
+    plot = True
+    if len(sys.argv) > 1 and sys.argv[1] == 'false':
+        plot = False
+        print 'Plot set to False.'
+    detector = Detector(plot=plot)
     detector.hsv_filt()
