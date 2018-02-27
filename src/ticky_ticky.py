@@ -49,9 +49,13 @@ class Detector(object):
 
         # Initialize plot variables
         self.start_time = time.time()
-        self.t = np.array([]) # time in seconds
-        self.x = np.array([]) # x position in pixels
-        self.y = np.array([]) # y position in pixels
+        # We need different times for different pendulums, because we might only detect one of the
+        #   two pendulums during a time step, in which case we will need to append a new time to
+        #   the time array for that pendulum, but not for the other pendulum.
+        self.time_l = np.array([]) # time in seconds for left pendulum
+        self.time_r = np.array([]) # time in seconds for right pendulum
+        self.theta_l = np.array([]) # angle of left pendulum (from vertical)
+        self.theta_r = np.array([]) # angle of right pendulum (from vertical)
 
 
     def set_h_lb(self, val):
@@ -90,6 +94,16 @@ class Detector(object):
         self.hsv_ub[2] = val
 
 
+    def circle_around_contour(self, contour, label):
+        """ Find a minimum enclosing circle around a given contour, draw the circle on
+        self.bgr_img, and return the circle's position """
+
+        ((x, y), r) = cv.minEnclosingCircle(contour)
+        cv.circle(self.bgr_img, (int(x), int(y)), int(r), (0, 255, 255), 2)
+        cv.putText(self.bgr_img, label, (int(x), int(y)), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+        return (x, y)
+
+
     def hsv_filt(self):
         """ Hsv filter the video cap """
 
@@ -101,6 +115,7 @@ class Detector(object):
 
             # Read in a single image from the video stream
             _, self.bgr_img = self.cap.read()
+            curr_time = time.time() - self.start_time
 
             # Draw lines to visually split bgr_img in four equal quadrants
             line_color = (255, 255, 0)
@@ -125,7 +140,7 @@ class Detector(object):
             contours = cv.findContours(self.mask_img.copy(), cv.RETR_EXTERNAL,
                     cv.CHAIN_APPROX_SIMPLE)[-2]
 
-            # Draw bounding circle around largest contour
+            # Draw bounding circle around largest contour in each quadrant
             tl = [] # largest contour in top-left quadrant
             tla = 0 # area of largest contour in top-left quadrant
             tr = [] # largest contour in top-right quadrant
@@ -156,20 +171,41 @@ class Detector(object):
                             bra = cv.contourArea(c)
 
             largest_contours = [ [tl, 'Top Left'], [tr, 'Top Right'], [bl, 'Bottom Left'], [br, 'Bottom Right'] ]
-            for c in largest_contours:
-                if len(c[0]) == 0: # if c is actually a contour
-                    continue
 
-                # Draw circle on image to show detected object
-                ((x, y), radius) = cv.minEnclosingCircle(c[0])
-                cv.circle(self.bgr_img, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-                cv.putText(self.bgr_img, c[1], (int(x), int(y)), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
-                if self.plot:
-                    self.t = np.append(self.t, time.time() - self.start_time)
-                    self.x = np.append(self.x, x)
-                    self.y = np.append(self.y, self.cap_height - y)
-                    plt.scatter(self.t[-1], self.x[-1])
-                    plt.pause(0.005)
+            found_l_pivot = False
+            found_l_pendulum = False
+            found_r_pivot = False
+            found_r_pendulum = False
+            if len(tl) > 0:
+                found_l_pivot = True
+                (x_tl, y_tl) = self.circle_around_contour(tl, 'Left Pivot')
+            if len(tr) > 0:
+                found_r_pivot = True
+                (x_tr, y_tr) = self.circle_around_contour(tr, 'Right Pivot')
+            if len(bl) > 0:
+                found_l_pendulum = True
+                (x_bl, y_bl) = self.circle_around_contour(bl, 'Left Pendulum')
+            if len(br) > 0:
+                found_r_pendulum = True
+                (x_br, y_br) = self.circle_around_contour(br, 'Right Pendulum')
+
+            if self.plot and found_l_pivot and found_l_pendulum:
+                opposite = x_bl - x_tl
+                adjacent = y_bl - y_tl
+                hypotenuse = math.sqrt(opposite ** 2 + adjacent ** 2)
+                try:
+                    self.theta_l = np.append(self.theta_l, math.asin(opposite / adjacent))
+                    self.time_l = np.append(self.time_l, curr_time)
+                except ValueError: print 'Illegal maths: asin(' + str(opposite) + '/' + str(adjacent) + ')'
+
+            if self.plot and found_r_pivot and found_r_pendulum:
+                opposite = x_br - x_tr
+                adjacent = y_br - y_tr
+                hypotenuse = math.sqrt(opposite ** 2 + adjacent ** 2)
+                try:
+                    self.theta_r = np.append(self.theta_r, math.asin(opposite / adjacent))
+                    self.time_r = np.append(self.time_r, curr_time)
+                except ValueError: print 'Illegal maths: asin(' + str(opposite) + '/' + str(adjacent) + ')'
 
             # Show windows
             cv.imshow('bgr_window', self.bgr_img)
@@ -182,14 +218,25 @@ class Detector(object):
                     # Save data to text file
                     now = datetime.now()
                     timestamp = '{:04d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
-                    np.savetxt('../data/' + timestamp + '.txt', np.array([self.t, self.x]))
+                    print self.time_l.shape
+                    print self.time_r.shape
+                    num_data_points = max(self.time_l.size, self.time_r.size)
+                    self.time_l = np.pad(self.time_l, (0, num_data_points - self.time_l.size), 'edge')
+                    self.theta_l = np.pad(self.theta_l, (0, num_data_points - self.theta_l.size), 'edge')
+                    self.time_r = np.pad(self.time_r, (0, num_data_points - self.time_r.size), 'edge')
+                    self.theta_r = np.pad(self.theta_r, (0, num_data_points - self.theta_r.size), 'edge')
+                    print self.time_l.shape
+                    print self.time_r.shape
+                    np.savetxt('../data/' + timestamp + '.txt', np.array([self.time_l, self.theta_l, self.time_r, self.theta_r]))
 
                     # Plot data
                     plt.ioff() # turn off interactive plotting
-                    plt.title('Position vs Time')
+                    plt.plot(self.time_l, self.theta_l)
+                    plt.plot(self.time_r, self.theta_r)
+                    plt.title('Angle vs Time')
                     plt.xlabel('Time (s)')
-                    plt.ylabel('Position (pixels)')
-                    plt.plot(self.t, self.x)
+                    plt.ylabel('Pendulum Angle')
+                    plt.legend(['Left Pendulum', 'Right Pendulum'])
                     plt.show()
                 break
             elif k == 115: # save hsv parameters if user presses 's' key
