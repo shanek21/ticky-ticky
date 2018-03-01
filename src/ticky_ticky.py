@@ -218,15 +218,11 @@ class Detector(object):
                     # Save data to text file
                     now = datetime.now()
                     timestamp = '{:04d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
-                    print self.time_l.shape
-                    print self.time_r.shape
                     num_data_points = max(self.time_l.size, self.time_r.size)
                     self.time_l = np.pad(self.time_l, (0, num_data_points - self.time_l.size), 'edge')
                     self.theta_l = np.pad(self.theta_l, (0, num_data_points - self.theta_l.size), 'edge')
                     self.time_r = np.pad(self.time_r, (0, num_data_points - self.time_r.size), 'edge')
                     self.theta_r = np.pad(self.theta_r, (0, num_data_points - self.theta_r.size), 'edge')
-                    print self.time_l.shape
-                    print self.time_r.shape
                     np.savetxt('../data/' + timestamp + '.txt', np.array([self.time_l, self.theta_l, self.time_r, self.theta_r]))
 
                     # Plot data
