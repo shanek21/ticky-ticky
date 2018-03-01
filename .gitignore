@@ -6,3 +6,6 @@ env/
 
 # Python files
 *.pyc
+
+# Data
+/data
