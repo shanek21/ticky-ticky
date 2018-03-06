@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 file_path = '../data/'
-file_name = 'double_pendula_in_phase'
+file_name = 'single_pendulum_no_escapement'
 file_ext = '.txt'
 loaded_data = np.loadtxt(file_path + file_name + file_ext)
 crop_start = 0

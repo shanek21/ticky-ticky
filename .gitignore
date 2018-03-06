@@ -8,4 +8,4 @@ env/
 *.pyc
 
 # Data
-/data
+**/data
