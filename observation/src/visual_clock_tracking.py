@@ -309,10 +309,23 @@ if __name__ == '__main__':
 
 
     plot = True
-    if len(sys.argv) <= 1:
-        print 'Must define the number of pendula you want to track (1 or 2)'
-    if len(sys.argv) > 1 and sys.argv[1] == 'false':
-        plot = False
-        print 'Plot set to False.'
-    detector = Detector(plot=plot)
+    if len(sys.argv) != 3:
+        print 'ERROR: you must define the number of pendula you want to track (1 or 2) and ' + \
+                'whether or not you want to plot and save the data (true or false)'
+        sys.exit()
+    elif sys.argv[1] not in ['1', '2']:
+        print 'ERROR: the first argument must be the number of pendula you want to track (1 or 2)'
+        sys.exit()
+    elif sys.argv[2].lower() not in ['true', 'false']:
+        print 'ERROR: the second argument must be whether or not you want to plot and save ' + \
+                'the data (true or false)'
+        sys.exit()
+    else:
+        num_pendula = int(sys.argv[1])
+        print 'Number of pendula set to ' + str(num_pendula)
+        if sys.argv[2].lower() == 'true': plot = True
+        else: plot = False
+        print 'Plot set to ' + str(plot)
+
+    detector = Detector(num_pendula=num_pendula, plot=plot)
     detector.hsv_filt()
