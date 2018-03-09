@@ -1,4 +1,4 @@
-function two_pendulum()
+function two_pendulum_nonlinear()
 % clear all
 % close all
 hold on
