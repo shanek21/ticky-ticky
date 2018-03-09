@@ -7,5 +7,5 @@ env/
 # Python files
 *.pyc
 
-# Data
-**/data
+# Weird OSx files
+.DS_Store
