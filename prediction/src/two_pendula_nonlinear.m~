@@ -1,22 +1,21 @@
 function two_pendulum_nonlinear()
-clear all
-close all
+% clear all
+% close all
 hold on
 hold all
-phi1_0 = pi/4;
-phi2_0 = -pi/4;
+phi1_0 = pi/8;
+phi2_0 = pi/8;
 omega1_0 = 0;
 omega2_0 = 0;
 Y_0 = 1;
 V_0 = 0;
-l = 0.326916;
+l = 0.32;
 g = 9.81;
 m = .0605;
 M = 1.328;
 mu = m/(M + 2*m);
 b = 0.00186;
 gamma = b*sqrt(l/(4*g));
-gamma = b;
 B = 0;
 Gamma = B*sqrt(l/(4*g))/(M+2*m);
 period = sqrt(l/g);
@@ -27,8 +26,8 @@ x0 = [phi1_0; omega1_0; phi2_0; omega2_0; Y_0; V_0];  %%inition condition
 
 
 figure(1) %angle 1 over time
-plot(T/period,X(:,1), 'b')
-plot(T/period, X(:,3), 'r')
+plot(T,X(:,1), 'b')
+plot(T, X(:,3), 'r')
 % xlim([0 300])
 xlabel('Time (seconds)')
 ylabel('Phi (rad)')
@@ -36,8 +35,8 @@ title('Position of Pendulum')
 legend('Phi 1', 'Phi 2')
 
 figure(2) %angle 1 over time
-plot(T/period,X(:,2), 'b')
-plot(T/period, X(:,4), 'r')
+plot(T,X(:,2), 'b')
+plot(T, X(:,4), 'r')
 % xlim([0 300])
 xlabel('Time (seconds)')
 ylabel('omega (rad/s)')
@@ -60,10 +59,10 @@ function res = derivs(t, x)
     
     dphi1dt = omega1;
     dphi2dt = omega2;
-    domega1dt = (-2*Gamma*V + 0*mu*(sin(phi1) + sin(phi2)))*cos(phi1) - 2*gamma*omega1*abs(omega1) - sin(phi1);
-    domega2dt = (-2*Gamma*V + 0*mu*(sin(phi1) + sin(phi2)))*cos(phi2) - 2*gamma*omega2*abs(omega2) - sin(phi2);
+    domega1dt = (2*Gamma*V - mu*(sin(phi1) + sin(phi2)))*cos(phi1) + 2*gamma*omega1*abs(omega1) + sin(phi1);
+    domega2dt = (2*Gamma*V - mu*(sin(phi1) + sin(phi2)))*cos(phi2) + 2*gamma*omega2*abs(omega2) + sin(phi2);
     dYdt = V;
-    dVdt = -2*Gamma*V - mu*(sin(phi1) + sin(phi2));
+    dVdt = -2*Gamma*V + mu*(sin(phi1) + sin(phi2));
     
     res = [dphi1dt; domega1dt; dphi2dt; domega2dt; dYdt; dVdt];
 end
