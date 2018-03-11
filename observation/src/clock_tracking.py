@@ -11,40 +11,57 @@ from datetime import datetime
 class Detector(object):
     """ Detect an object based on color """
 
-    def __init__(self, num_pendula=2, plot=True):
+    def __init__(self, num_pendula=2, cart=True, plot=True):
 
+        # The number of pendula to track
         self.num_pendula = num_pendula
+
+        # Whether or not to track a cart
+        self.cart = cart
 
         # Whether or not to do a live plot of the data
         self.plot = plot
 
         # Grab video capture
-        self.cap = cv.VideoCapture(0)
-        self.cap_width = self.cap.get(cv.CAP_PROP_FRAME_WIDTH) # width of video stream in pixels
-        self.cap_height = self.cap.get(cv.CAP_PROP_FRAME_HEIGHT) # height of video stream in pixels
+        self.pendula_cap = cv.VideoCapture(0)
+        if self.cart: self.cart_cap = cv.VideoCapture(1)
+        self.cap_width = self.pendula_cap.get(cv.CAP_PROP_FRAME_WIDTH) # width of video stream in pixels
+        self.cap_height = self.pendula_cap.get(cv.CAP_PROP_FRAME_HEIGHT) # height of video stream in pixels
 
         # Create windows
-        cv.namedWindow('bgr_window') # window for unprocessed image
-        cv.moveWindow('bgr_window', 0, 0)
-        cv.namedWindow('mask_window') # window for binary image
-        cv.moveWindow('mask_window', 700, 0)
+        cv.namedWindow('pendula_window')
+        cv.moveWindow('pendula_window', 0, 0)
+        if self.cart:
+            cv.namedWindow('cart_window')
+            cv.moveWindow('cart_window', 0, 700)
+
 
         # Initialize CV images
-        self.bgr_img = None # the latest image from the camera
-        self.hsv_img = None
-        self.mask_img = None
-        self.mask_img = None
+        self.pendula_bgr_img = None
+        self.pendula_hsv_img = None
+        self.pendula_mask_img = None
+        if self.cart: self.cart_bgr_img = None
 
-        # HSV filter sliders
+        # Pendula HSV filter sliders
         hsv_parameters = np.loadtxt('hsv_parameters.txt', dtype=np.int_)
         self.hsv_lb = hsv_parameters[0]
         self.hsv_ub = hsv_parameters[1]
-        cv.createTrackbar('H lb', 'mask_window', self.hsv_lb[0], 255, self.set_h_lb)
-        cv.createTrackbar('H ub', 'mask_window', self.hsv_ub[0], 255, self.set_h_ub)
-        cv.createTrackbar('S lb', 'mask_window', self.hsv_lb[1], 255, self.set_s_lb)
-        cv.createTrackbar('S ub', 'mask_window', self.hsv_ub[1], 255, self.set_s_ub)
-        cv.createTrackbar('V lb', 'mask_window', self.hsv_lb[2], 255, self.set_v_lb)
-        cv.createTrackbar('V ub', 'mask_window', self.hsv_ub[2], 255, self.set_v_ub)
+        cv.createTrackbar('H lb', 'pendula_window', self.hsv_lb[0], 255, self.set_p_h_lb)
+        cv.createTrackbar('H ub', 'pendula_window', self.hsv_ub[0], 255, self.set_p_h_ub)
+        cv.createTrackbar('S lb', 'pendula_window', self.hsv_lb[1], 255, self.set_p_s_lb)
+        cv.createTrackbar('S ub', 'pendula_window', self.hsv_ub[1], 255, self.set_p_s_ub)
+        cv.createTrackbar('V lb', 'pendula_window', self.hsv_lb[2], 255, self.set_p_v_lb)
+        cv.createTrackbar('V ub', 'pendula_window', self.hsv_ub[2], 255, self.set_p_v_ub)
+
+        # hsv_parameters = np.loadtxt('hsv_parameters.txt', dtype=np.int_)
+        # self.hsv_lb = hsv_parameters[0]
+        # self.hsv_ub = hsv_parameters[1]
+        # cv.createTrackbar('H lb', 'cart_window', self.hsv_lb[0], 255, self.set_h_lb)
+        # cv.createTrackbar('H ub', 'cart_window', self.hsv_ub[0], 255, self.set_h_ub)
+        # cv.createTrackbar('S lb', 'cart_window', self.hsv_lb[1], 255, self.set_s_lb)
+        # cv.createTrackbar('S ub', 'cart_window', self.hsv_ub[1], 255, self.set_s_ub)
+        # cv.createTrackbar('V lb', 'cart_window', self.hsv_lb[2], 255, self.set_v_lb)
+        # cv.createTrackbar('V ub', 'cart_window', self.hsv_ub[2], 255, self.set_v_ub)
 
         # Enable interactive plotting mode
         plt.ion()
@@ -66,37 +83,37 @@ class Detector(object):
 
 
 
-    def set_h_lb(self, val):
+    def set_p_h_lb(self, val):
         """ Slider callback to set hue lower bound """
 
         self.hsv_lb[0] = val
 
 
-    def set_h_ub(self, val):
+    def set_p_h_ub(self, val):
         """ Slider callback to set hue upper bound """
 
         self.hsv_ub[0] = val
 
 
-    def set_s_lb(self, val):
+    def set_p_s_lb(self, val):
         """ Slider callback to set saturation lower bound """
 
         self.hsv_lb[1] = val
 
 
-    def set_s_ub(self, val):
+    def set_p_s_ub(self, val):
         """ Slider callback to set saturation upper bound """
 
         self.hsv_ub[1] = val
 
 
-    def set_v_lb(self, val):
+    def set_p_v_lb(self, val):
         """ Slider callback to set value lower bound """
 
         self.hsv_lb[2] = val
 
 
-    def set_v_ub(self, val):
+    def set_p_v_ub(self, val):
         """ Slider callback to set value upper bound """
 
         self.hsv_ub[2] = val
@@ -104,51 +121,50 @@ class Detector(object):
 
     def circle_around_contour(self, contour, label):
         """ Find a minimum enclosing circle around a given contour, draw the circle on
-        self.bgr_img, and return the circle's position """
+        self.pendula_bgr_img, and return the circle's position """
 
         ((x, y), r) = cv.minEnclosingCircle(contour)
-        cv.circle(self.bgr_img, (int(x), int(y)), int(r), (0, 255, 255), 2)
-        cv.putText(self.bgr_img, label, (int(x), int(y)), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+        cv.circle(self.pendula_bgr_img, (int(x), int(y)), int(r), (0, 255, 255), 2)
+        cv.putText(self.pendula_bgr_img, label, (int(x), int(y)), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
         return (x, y)
 
 
     def hsv_filt(self):
-        """ Hsv filter the video cap """
+        """ Hsv filter the video pendula_cap """
 
         while 1:
             # Setup cv windows
-            cv.namedWindow('bgr_window') # window for bgr video stream
-            # cv.namedWindow('sliders_window') # window for parameter sliders
-            cv.namedWindow('mask_window') # window for binary mask image
+            cv.namedWindow('pendula_window') # window for binary mask image
 
             # Read in a single image from the video stream
-            _, self.bgr_img = self.cap.read()
+            _, self.pendula_bgr_img = self.pendula_cap.read()
+            if cart: _, self.cart_bgr_img = self.cart_cap.read()
             curr_time = time.time() - self.start_time
 
-            # Draw lines to visually split bgr_img in four equal quadrants
+            # Draw lines to visually split pendula_bgr_img in four equal quadrants
             line_color = (255, 255, 0)
             # Horizontal bisecting line
-            cv.line(self.bgr_img, (0, int(self.cap_height / 2)),
+            cv.line(self.pendula_bgr_img, (0, int(self.cap_height / 2)),
                     (int(self.cap_width), int(self.cap_height / 2)), line_color)
             if self.num_pendula == 2:
                 # Vertical bisecting line
-                cv.line(self.bgr_img, (int(self.cap_width / 2), 0),
+                cv.line(self.pendula_bgr_img, (int(self.cap_width / 2), 0),
                         (int(self.cap_width / 2), int(self.cap_height)), line_color)
 
             # Convert bgr to hsv
-            self.hsv_img = cv.cvtColor(self.bgr_img, cv.COLOR_BGR2HSV)
+            self.hsv_img = cv.cvtColor(self.pendula_bgr_img, cv.COLOR_BGR2HSV)
 
             # Threshold the hsv_img to get only blue colors
-            self.mask_img = cv.inRange(self.hsv_img, self.hsv_lb, self.hsv_ub)
+            self.pendula_mask_img = cv.inRange(self.hsv_img, self.hsv_lb, self.hsv_ub)
 
             # Erode away small particles in the mask image
-            self.mask_img = cv.erode(self.mask_img, None, iterations=1)
+            self.pendula_mask_img = cv.erode(self.pendula_mask_img, None, iterations=1)
 
             # Blur the masked image to improve contour detection
-            self.mask_img = cv.GaussianBlur(self.mask_img, (11, 11), 0)
+            self.pendula_mask_img = cv.GaussianBlur(self.pendula_mask_img, (11, 11), 0)
 
             # Detect contours
-            contours = cv.findContours(self.mask_img.copy(), cv.RETR_EXTERNAL,
+            contours = cv.findContours(self.pendula_mask_img.copy(), cv.RETR_EXTERNAL,
                     cv.CHAIN_APPROX_SIMPLE)[-2]
 
             if self.num_pendula == 2:
@@ -163,21 +179,21 @@ class Detector(object):
                 bra = 0 # area of largest contour in bottom-right quadrant
                 for c in contours:
                     p = c[0][0] # the first point in the contour
-                    if p[0] < self.cap_width / 2: # left half of bgr_img
-                        if p[1] < self.cap_height / 2: # top-left quadrant of bgr_img
+                    if p[0] < self.cap_width / 2: # left half of pendula_bgr_img
+                        if p[1] < self.cap_height / 2: # top-left quadrant of pendula_bgr_img
                             if cv.contourArea(c) > tla:
                                 tl = c
                                 tla = cv.contourArea(c)
-                        else: # bottom-left quadrant of bgr_img
+                        else: # bottom-left quadrant of pendula_bgr_img
                             if cv.contourArea(c) > bla:
                                 bl = c
                                 bla = cv.contourArea(c)
-                    else: # right half of bgr_img
-                        if p[1] < self.cap_height / 2: # top-right quadrant of bgr_img
+                    else: # right half of pendula_bgr_img
+                        if p[1] < self.cap_height / 2: # top-right quadrant of pendula_bgr_img
                             if cv.contourArea(c) > tra:
                                 tr = c
                                 tra = cv.contourArea(c)
-                        else: # bottom-right quadrant of bgr_img
+                        else: # bottom-right quadrant of pendula_bgr_img
                             if cv.contourArea(c) > bra:
                                 br = c
                                 bra = cv.contourArea(c)
@@ -225,11 +241,11 @@ class Detector(object):
                 ba = 0 # area of largest contour in bottom half
                 for c in contours:
                     p = c[0][0] # the first point in the contour
-                    if p[1] < self.cap_height / 2: # top half of bgr_img
+                    if p[1] < self.cap_height / 2: # top half of pendula_bgr_img
                         if cv.contourArea(c) > ta:
                             t = c
                             ta = cv.contourArea(c)
-                    else: # bottom half of bgr_img
+                    else: # bottom half of pendula_bgr_img
                         if cv.contourArea(c) > ba:
                             b = c
                             ba = cv.contourArea(c)
@@ -255,8 +271,8 @@ class Detector(object):
                     except ValueError: print 'Illegal maths: asin(' + str(opposite) + '/' + str(adjacent) + ')'
 
             # Show windows
-            cv.imshow('bgr_window', self.bgr_img)
-            cv.imshow('mask_window', self.mask_img)
+            cv.imshow('pendula_window', np.hstack((self.pendula_bgr_img, cv.cvtColor(self.pendula_mask_img, cv.COLOR_GRAY2RGB))))
+            if self.cart: cv.imshow('cart_window', self.cart_bgr_img)
 
             # Delay and look for user input to exit loop
             k = cv.waitKey(5) & 0xFF
@@ -309,23 +325,31 @@ if __name__ == '__main__':
 
 
     plot = True
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 4:
         print 'ERROR: you must define the number of pendula you want to track (1 or 2) and ' + \
-                'whether or not you want to plot and save the data (true or false)'
+                'whether or not you want to track a cart (true or false) and whether or not ' + \
+                'plot and save the data (true or false)'
         sys.exit()
     elif sys.argv[1] not in ['1', '2']:
         print 'ERROR: the first argument must be the number of pendula you want to track (1 or 2)'
         sys.exit()
     elif sys.argv[2].lower() not in ['true', 'false']:
+        print 'ERROR: the second argument must be whether or not you want to track a cart ' + \
+                '(true or false)'
+        sys.exit()
+    elif sys.argv[3].lower() not in ['true', 'false']:
         print 'ERROR: the second argument must be whether or not you want to plot and save ' + \
                 'the data (true or false)'
         sys.exit()
     else:
         num_pendula = int(sys.argv[1])
         print 'Number of pendula set to ' + str(num_pendula)
-        if sys.argv[2].lower() == 'true': plot = True
+        if sys.argv[2].lower() == 'true': cart = True
+        else: cart = False
+        print 'Cart tracking set to ' + str(cart)
+        if sys.argv[3].lower() == 'true': plot = True
         else: plot = False
-        print 'Plot set to ' + str(plot)
+        print 'Plotting set to ' + str(plot)
 
-    detector = Detector(num_pendula=num_pendula, plot=plot)
+    detector = Detector(num_pendula, cart, plot)
     detector.hsv_filt()
