@@ -36,32 +36,35 @@ class Detector(object):
             cv.moveWindow('cart_window', 0, 700)
 
 
-        # Initialize CV images
+        # Initialize images
         self.pendula_bgr_img = None
         self.pendula_hsv_img = None
         self.pendula_mask_img = None
-        if self.cart: self.cart_bgr_img = None
+        if self.cart:
+            self.cart_bgr_img = None
+            self.cart_hsv_img = None
+            self.cart_mask_img = None
 
         # Pendula HSV filter sliders
-        hsv_parameters = np.loadtxt('hsv_parameters.txt', dtype=np.int_)
-        self.hsv_lb = hsv_parameters[0]
-        self.hsv_ub = hsv_parameters[1]
-        cv.createTrackbar('H lb', 'pendula_window', self.hsv_lb[0], 255, self.set_p_h_lb)
-        cv.createTrackbar('H ub', 'pendula_window', self.hsv_ub[0], 255, self.set_p_h_ub)
-        cv.createTrackbar('S lb', 'pendula_window', self.hsv_lb[1], 255, self.set_p_s_lb)
-        cv.createTrackbar('S ub', 'pendula_window', self.hsv_ub[1], 255, self.set_p_s_ub)
-        cv.createTrackbar('V lb', 'pendula_window', self.hsv_lb[2], 255, self.set_p_v_lb)
-        cv.createTrackbar('V ub', 'pendula_window', self.hsv_ub[2], 255, self.set_p_v_ub)
+        pendula_hsv_parameters = np.loadtxt('pendula_hsv_parameters.csv', delimiter=',', dtype=np.int_)
+        self.pendula_hsv_lb, self.pendula_hsv_ub = pendula_hsv_parameters
+        cv.createTrackbar('H lb', 'pendula_window', self.pendula_hsv_lb[0], 255, self.set_pendula_h_lb)
+        cv.createTrackbar('H ub', 'pendula_window', self.pendula_hsv_ub[0], 255, self.set_pendula_h_ub)
+        cv.createTrackbar('S lb', 'pendula_window', self.pendula_hsv_lb[1], 255, self.set_pendula_s_lb)
+        cv.createTrackbar('S ub', 'pendula_window', self.pendula_hsv_ub[1], 255, self.set_pendula_s_ub)
+        cv.createTrackbar('V lb', 'pendula_window', self.pendula_hsv_lb[2], 255, self.set_pendula_v_lb)
+        cv.createTrackbar('V ub', 'pendula_window', self.pendula_hsv_ub[2], 255, self.set_pendula_v_ub)
 
-        # hsv_parameters = np.loadtxt('hsv_parameters.txt', dtype=np.int_)
-        # self.hsv_lb = hsv_parameters[0]
-        # self.hsv_ub = hsv_parameters[1]
-        # cv.createTrackbar('H lb', 'cart_window', self.hsv_lb[0], 255, self.set_h_lb)
-        # cv.createTrackbar('H ub', 'cart_window', self.hsv_ub[0], 255, self.set_h_ub)
-        # cv.createTrackbar('S lb', 'cart_window', self.hsv_lb[1], 255, self.set_s_lb)
-        # cv.createTrackbar('S ub', 'cart_window', self.hsv_ub[1], 255, self.set_s_ub)
-        # cv.createTrackbar('V lb', 'cart_window', self.hsv_lb[2], 255, self.set_v_lb)
-        # cv.createTrackbar('V ub', 'cart_window', self.hsv_ub[2], 255, self.set_v_ub)
+        # Cart HSV filter sliders
+        if self.cart:
+            cart_hsv_parameters = np.loadtxt('cart_hsv_parameters.csv', delimiter=',', dtype=np.int_)
+            self.cart_hsv_lb, self.cart_hsv_ub = cart_hsv_parameters
+            cv.createTrackbar('H lb', 'cart_window', self.cart_hsv_lb[0], 255, self.set_cart_h_lb)
+            cv.createTrackbar('H ub', 'cart_window', self.cart_hsv_ub[0], 255, self.set_cart_h_ub)
+            cv.createTrackbar('S lb', 'cart_window', self.cart_hsv_lb[1], 255, self.set_cart_s_lb)
+            cv.createTrackbar('S ub', 'cart_window', self.cart_hsv_ub[1], 255, self.set_cart_s_ub)
+            cv.createTrackbar('V lb', 'cart_window', self.cart_hsv_lb[2], 255, self.set_cart_v_lb)
+            cv.createTrackbar('V ub', 'cart_window', self.cart_hsv_ub[2], 255, self.set_cart_v_ub)
 
         # Enable interactive plotting mode
         plt.ion()
@@ -81,42 +84,27 @@ class Detector(object):
             self.time = np.array([]) # time in seconds for pendulum
             self.theta = np.array([]) # angle of pendulum (from vertical)
 
+        if self.cart:
+            self.time_cart = np.array([]) # time in seconds for cart
+            self.cart_pos = np.array([]) # position of cart
 
 
-    def set_p_h_lb(self, val):
-        """ Slider callback to set hue lower bound """
-
-        self.hsv_lb[0] = val
-
-
-    def set_p_h_ub(self, val):
-        """ Slider callback to set hue upper bound """
-
-        self.hsv_ub[0] = val
+    # Pendula HSV slider callbacks
+    def set_pendula_h_lb(self, val): self.pendula_hsv_lb[0] = val
+    def set_pendula_h_ub(self, val): self.pendula_hsv_ub[0] = val
+    def set_pendula_s_lb(self, val): self.pendula_hsv_lb[1] = val
+    def set_pendula_s_ub(self, val): self.pendula_hsv_ub[1] = val
+    def set_pendula_v_lb(self, val): self.pendula_hsv_lb[2] = val
+    def set_pendula_v_ub(self, val): self.pendula_hsv_ub[2] = val
 
 
-    def set_p_s_lb(self, val):
-        """ Slider callback to set saturation lower bound """
-
-        self.hsv_lb[1] = val
-
-
-    def set_p_s_ub(self, val):
-        """ Slider callback to set saturation upper bound """
-
-        self.hsv_ub[1] = val
-
-
-    def set_p_v_lb(self, val):
-        """ Slider callback to set value lower bound """
-
-        self.hsv_lb[2] = val
-
-
-    def set_p_v_ub(self, val):
-        """ Slider callback to set value upper bound """
-
-        self.hsv_ub[2] = val
+    # Cart HSV slider callbacks
+    def set_cart_h_lb(self, val): self.cart_hsv_lb[0] = val
+    def set_cart_h_ub(self, val): self.cart_hsv_ub[0] = val
+    def set_cart_s_lb(self, val): self.cart_hsv_lb[1] = val
+    def set_cart_s_ub(self, val): self.cart_hsv_ub[1] = val
+    def set_cart_v_lb(self, val): self.cart_hsv_lb[2] = val
+    def set_cart_v_ub(self, val): self.cart_hsv_ub[2] = val
 
 
     def circle_around_contour(self, contour, label):
@@ -133,12 +121,11 @@ class Detector(object):
         """ Hsv filter the video pendula_cap """
 
         while 1:
-            # Setup cv windows
-            cv.namedWindow('pendula_window') # window for binary mask image
-
             # Read in a single image from the video stream
             _, self.pendula_bgr_img = self.pendula_cap.read()
-            if cart: _, self.cart_bgr_img = self.cart_cap.read()
+            if cart:
+                _, self.cart_bgr_img = self.cart_cap.read()
+
             curr_time = time.time() - self.start_time
 
             # Draw lines to visually split pendula_bgr_img in four equal quadrants
@@ -152,19 +139,15 @@ class Detector(object):
                         (int(self.cap_width / 2), int(self.cap_height)), line_color)
 
             # Convert bgr to hsv
-            self.hsv_img = cv.cvtColor(self.pendula_bgr_img, cv.COLOR_BGR2HSV)
-
-            # Threshold the hsv_img to get only blue colors
-            self.pendula_mask_img = cv.inRange(self.hsv_img, self.hsv_lb, self.hsv_ub)
-
+            self.pendula_hsv_img = cv.cvtColor(self.pendula_bgr_img, cv.COLOR_BGR2HSV)
+            # Threshold the pendula_hsv_img
+            self.pendula_mask_img = cv.inRange(self.pendula_hsv_img, self.pendula_hsv_lb, self.pendula_hsv_ub)
             # Erode away small particles in the mask image
             self.pendula_mask_img = cv.erode(self.pendula_mask_img, None, iterations=1)
-
             # Blur the masked image to improve contour detection
             self.pendula_mask_img = cv.GaussianBlur(self.pendula_mask_img, (11, 11), 0)
-
             # Detect contours
-            contours = cv.findContours(self.pendula_mask_img.copy(), cv.RETR_EXTERNAL,
+            pendula_contours = cv.findContours(self.pendula_mask_img.copy(), cv.RETR_EXTERNAL,
                     cv.CHAIN_APPROX_SIMPLE)[-2]
 
             if self.num_pendula == 2:
@@ -177,7 +160,7 @@ class Detector(object):
                 bla = 0 # area of largest contour in bottom-left quadrant
                 br = [] # largest contour in bottom-right quadrant
                 bra = 0 # area of largest contour in bottom-right quadrant
-                for c in contours:
+                for c in pendula_contours:
                     p = c[0][0] # the first point in the contour
                     if p[0] < self.cap_width / 2: # left half of pendula_bgr_img
                         if p[1] < self.cap_height / 2: # top-left quadrant of pendula_bgr_img
@@ -239,7 +222,7 @@ class Detector(object):
                 ta = 0 # area of largest contour in top half
                 b = [] # largest contour in bottom half
                 ba = 0 # area of largest contour in bottom half
-                for c in contours:
+                for c in pendula_contours:
                     p = c[0][0] # the first point in the contour
                     if p[1] < self.cap_height / 2: # top half of pendula_bgr_img
                         if cv.contourArea(c) > ta:
@@ -270,9 +253,29 @@ class Detector(object):
                         self.time = np.append(self.time, curr_time)
                     except ValueError: print 'Illegal maths: asin(' + str(opposite) + '/' + str(adjacent) + ')'
 
+            if self.cart:
+                # Convert bgr to hsv
+                self.cart_hsv_img = cv.cvtColor(self.cart_bgr_img, cv.COLOR_BGR2HSV)
+                # Threshold the cart_hsv_img
+                self.cart_mask_img = cv.inRange(self.cart_hsv_img, self.cart_hsv_lb, self.cart_hsv_ub)
+                # Erode away small particles in the mask image
+                self.cart_mask_img = cv.erode(self.cart_mask_img, None, iterations=1)
+                # Blur the masked image to improve contour detection
+                self.cart_mask_img = cv.GaussianBlur(self.cart_mask_img, (11, 11), 0)
+                # Detect contours
+                cart_contours = cv.findContours(self.cart_mask_img.copy(), cv.RETR_EXTERNAL,
+                        cv.CHAIN_APPROX_SIMPLE)[-2]
+                if cart_contours:
+                    largest_contour = max(cart_contours, key=cv.contourArea)
+                    x, y, w, h = cv.boundingRect(largest_contour)
+                    cv.rectangle(self.cart_bgr_img, (x, y), (x+w, y+h), (0, 255, 255), 2)
+                    self.time_cart = np.append(self.time_cart, curr_time)
+                    self.cart_pos = np.append(self.cart_pos, w)
+
             # Show windows
             cv.imshow('pendula_window', np.hstack((self.pendula_bgr_img, cv.cvtColor(self.pendula_mask_img, cv.COLOR_GRAY2RGB))))
-            if self.cart: cv.imshow('cart_window', self.cart_bgr_img)
+            if self.cart:
+                cv.imshow('cart_window', np.hstack((self.cart_bgr_img, cv.cvtColor(self.cart_mask_img, cv.COLOR_GRAY2RGB))))
 
             # Delay and look for user input to exit loop
             k = cv.waitKey(5) & 0xFF
@@ -293,7 +296,7 @@ class Detector(object):
                         self.theta_r = np.pad(self.theta_r, (0, num_data_points - self.theta_r.size), 'edge')
 
                         # Save collected data
-                        np.savetxt('../data/' + timestamp + '.txt', np.array([self.time_l, self.theta_l, self.time_r, self.theta_r]))
+                        np.savetxt('../data/' + timestamp + '.csv', np.array([self.time_l, self.theta_l, self.time_r, self.theta_r]), delimiter=',')
 
                         # Plot data
                         plt.plot(self.time_l, self.theta_l)
@@ -301,10 +304,14 @@ class Detector(object):
                         plt.legend(['Left Pendulum', 'Right Pendulum'])
                     else: # self.num_pendula == 1
                         # Save collected data
-                        np.savetxt('../data/' + timestamp + '.txt', np.array([self.time, self.theta]))
+                        np.savetxt('../data/' + timestamp + '.csv', np.array([self.time, self.theta]), delimiter=',')
 
                         # Plot data
                         plt.plot(self.time, self.theta)
+
+                    if self.cart:
+                        np.savetxt('../data/' + timestamp + '_cart.csv', np.array([self.time_cart, self.cart_pos]), delimiter=',')
+
 
                     # Label graph
                     plt.title('Angle vs Time')
@@ -313,8 +320,11 @@ class Detector(object):
                     plt.show()
                 break
             elif k == 115: # save hsv parameters if user presses 's' key
-                np.savetxt('hsv_parameters.txt', np.array([self.hsv_lb, self.hsv_ub]), fmt='%03d')
-                print 'Saved HSV parameters.'
+                np.savetxt('pendula_hsv_parameters.csv', np.array([self.pendula_hsv_lb, self.pendula_hsv_ub]), fmt='%03d', delimiter=',')
+                print 'Saved pendula HSV parameters.'
+                if self.cart:
+                    np.savetxt('cart_hsv_parameters.csv', np.array([self.cart_hsv_lb, self.cart_hsv_ub]), fmt='%03d', delimiter=',')
+                    print 'Saved cart HSV parameters.'
 
         # Close opencv windows
         cv.destroyAllWindows()
